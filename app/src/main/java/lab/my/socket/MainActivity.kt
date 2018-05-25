@@ -3,6 +3,11 @@ package lab.my.socket
 import android.content.Context
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
+import android.widget.TextView
 import kotlinx.android.synthetic.main.activity_main.*
 import org.jetbrains.anko.defaultSharedPreferences
 import org.jetbrains.anko.doAsync
@@ -21,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     private var output: BufferedWriter? = null
 
     private var isConnect = false
+    private var responseList = arrayListOf<HashMap<String, String>>()
+    private val responseAdapter = ResponseAdapter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         sid_ed.setText(defaultSharedPreferences.getString("sid", ""))
         did_ed.setText(defaultSharedPreferences.getString("did", ""))
         msg_ed.setText(defaultSharedPreferences.getString("message", ""))
-
+        serverResponse_lv.adapter = responseAdapter
         connect_btn.setOnClickListener {
             val ip = ip_ed.text.toString().trim()
             val port = port_ed.text.toString().trim().toInt()
@@ -60,7 +67,6 @@ class MainActivity : AppCompatActivity() {
             defaultSharedPreferences.edit().putString("did", did).apply()
             defaultSharedPreferences.edit().putString("message", messages).apply()
 
-            serverResult_tv.text = "Waiting for server response..."
             try {
                 doAsync {
                     output?.write("$sid$did$messages")
@@ -69,7 +75,6 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                serverResult_tv.text = e.message
             }
 
         }
@@ -80,10 +85,13 @@ class MainActivity : AppCompatActivity() {
             try {
                 val time = SimpleDateFormat("YYYY-MM-dd hh:mm:ss", Locale.getDefault())
                 val response = reader.readLine()
-                println(response)
+                val map = hashMapOf<String, String>()
+                map["response"] = response
+                map["time"] = time.format(Date())
+                responseList.add(0, map)
+                println(responseList.toString())
                 uiThread {
-                    time_tv.text = time.format(Date())
-                    serverResult_tv.text = response
+                    responseAdapter.notifyDataSetChanged()
                 }
                 startServerReplyListener(reader)
             } catch (e: IOException) {
@@ -93,6 +101,36 @@ class MainActivity : AppCompatActivity() {
 
     }
 
+    inner class ResponseAdapter : BaseAdapter() {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            var view: View
+            if (convertView == null) {
+                view = LayoutInflater.from(this@MainActivity).inflate(R.layout.cell_server_response, parent, false)
+            } else {
+                view = convertView
+            }
+            val dataMap = responseList[position]
+            val response_tv: TextView = view.findViewById(R.id.response_tv)
+            val time_tv: TextView = view.findViewById(R.id.time_tv)
+
+            response_tv.text = dataMap["response"]
+            time_tv.text = dataMap["time"]
+            return view
+        }
+
+        override fun getItem(position: Int): Any {
+            return responseList[position]
+        }
+
+        override fun getItemId(position: Int): Long {
+            return position.toLong()
+        }
+
+        override fun getCount(): Int {
+            return responseList.size
+        }
+
+    }
 
     private fun closeSocket() {
         output?.close()
